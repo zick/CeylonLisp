@@ -64,6 +64,17 @@ LObj makeSubr(Subr fn) => LObj("subr", fn);
 LObj makeExpr(LObj args, LObj env) =>
   LObj("expr", [safeCar(args), safeCdr(args), env]);
 
+LObj nreverse(variable LObj lst) {
+  variable LObj ret = kNil;
+  while (is Cons cons = lst.data) {
+    LObj tmp = cons.cdr;
+    cons.cdr = ret;
+    ret = lst;
+    lst = tmp;
+  }
+  return ret;
+}
+
 Boolean isSpace(Character c) {
   return c in "\n\r\t ";
 }
@@ -127,15 +138,72 @@ ParseState read(variable String str) {
     if (c == kRPar) {
       return ParseState(makeError("invalid syntax: " + str), "");
     } else if (c == kLPar) {
-      return ParseState(makeError("noimpl"), "");
+      return readList(str[1..str.size-1]);
     } else if (c == kQuote) {
-      return ParseState(makeError("noimpl"), "");
+      ParseState tmp = read(str[1..str.size-1]);
+      return ParseState(makeCons(makeSym("quote"), makeCons(tmp.obj, kNil)),
+                        tmp.next);
     } else {
       return readAtom(str);
     }
   } else {
     return ParseState(makeError("empty input"), "");
   }
+}
+
+ParseState readList(variable String str) {
+  variable LObj ret = kNil;
+  while (true) {
+    str = skipSpaces(str);
+    if (exists c = str[0]) {
+      if (c == kRPar) {
+        break;
+      }
+    } else {
+      return ParseState(makeError("unfinished parenthesis"), "");
+    }
+    ParseState tmp = read(str);
+    if (tmp.obj.tag == "error") {
+      return tmp;
+    }
+    ret = makeCons(tmp.obj, ret);
+    str = tmp.next;
+  }
+  return ParseState(nreverse(ret), str[1..str.size-1]);
+}
+
+String printObj(LObj obj) {
+  if (is String str = obj.data) {
+    if (obj.tag == "error") {
+      return "<error: " + str + ">";
+    }
+    return str;
+  } else if (is Number num = obj.data) {
+    return num.string;
+  } else if (is Cons cons = obj.data) {
+    return printList(obj);
+  } else if (obj.tag == "subr" || obj.tag == "expr") {
+    return "<" + obj.tag + ">";
+  }
+  return "<unknown>";
+}
+
+String printList(variable LObj obj) {
+  variable String ret = "";
+  variable Boolean first = true;
+  while (is Cons cons = obj.data) {
+    if (first) {
+      first = false;
+    } else {
+      ret += " ";
+    }
+    ret += printObj(cons.car);
+    obj = cons.cdr;
+  }
+  if (obj == kNil) {
+    return "(" + ret + ")";
+  }
+  return "(" + ret + " . " + printObj(obj) + ")";
 }
 
 String? readLine() => process.readLine();
@@ -147,7 +215,7 @@ void run() {
       // HACK: The return type of process.readLine is String but it can return
       // null when it reads EOF. I verified this code works on ceylon 1.0.0.
       if (exists line = readLine()) {
-        print(read(line).obj.data);
+        print(printObj(read(line).obj));
       } else {
         break;
       }
