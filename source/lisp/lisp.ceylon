@@ -75,6 +75,16 @@ LObj nreverse(variable LObj lst) {
   return ret;
 }
 
+LObj pairlis(variable LObj lst1, variable LObj lst2) {
+  variable LObj ret = kNil;
+  while (is Cons c1 = lst1.data, is Cons c2 = lst2.data) {
+    ret = makeCons(makeCons(c1.car, c2.car), ret);
+    lst1 = c1.cdr;
+    lst2 = c2.cdr;
+  }
+  return nreverse(ret);
+}
+
 Boolean isSpace(Character c) {
   return c in "\n\r\t ";
 }
@@ -255,6 +265,8 @@ LObj eval(LObj obj, LObj env) {
       return eval(safeCar(safeCdr(safeCdr(args))), env);
     }
     return eval(safeCar(safeCdr(args)), env);
+  } else if (op == makeSym("lambda")) {
+    return makeExpr(args, env);
   }
   return apply(eval(op, env), evlis(args, env), env);
 }
@@ -272,6 +284,15 @@ LObj evlis(variable LObj lst, LObj env) {
   return nreverse(ret);
 }
 
+LObj progn(variable LObj body, LObj env) {
+  variable LObj ret = kNil;
+  while (is Cons cons = body.data) {
+    ret = eval(cons.car, env);
+    body = cons.cdr;
+  }
+  return ret;
+}
+
 LObj apply(LObj fn, LObj args, LObj env) {
   if (fn.tag == "error") {
     return fn;
@@ -279,6 +300,8 @@ LObj apply(LObj fn, LObj args, LObj env) {
     return args;
   } else if (is Subr subr = fn.data) {
     return subr(args);
+  } else if (is Expr expr = fn.data) {
+    return progn(expr[1], makeCons(pairlis(expr[0], args), expr[2]));
   }
   return makeError(printObj(fn) + " is not function");
 }
