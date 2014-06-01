@@ -245,12 +245,62 @@ LObj eval(LObj obj, LObj env) {
       return makeError(str + " has no value");
     }
   }
-  return makeError("noimpl");
+
+  LObj op = safeCar(obj);
+  LObj args = safeCdr(obj);
+  if (op == makeSym("quote")) {
+    return safeCar(args);
+  } else if (op == makeSym("if")) {
+    if (eval(safeCar(args), env) == kNil) {
+      return eval(safeCar(safeCdr(safeCdr(args))), env);
+    }
+    return eval(safeCar(safeCdr(args)), env);
+  }
+  return apply(eval(op, env), evlis(args, env), env);
+}
+
+LObj evlis(variable LObj lst, LObj env) {
+  variable LObj ret = kNil;
+  while (is Cons cons = lst.data) {
+    LObj elm = eval(cons.car, env);
+    if (elm.tag == "error") {
+      return elm;
+    }
+    ret = makeCons(elm, ret);
+    lst = cons.cdr;
+  }
+  return nreverse(ret);
+}
+
+LObj apply(LObj fn, LObj args, LObj env) {
+  if (fn.tag == "error") {
+    return fn;
+  } else if (args.tag == "error") {
+    return args;
+  } else if (is Subr subr = fn.data) {
+    return subr(args);
+  }
+  return makeError(printObj(fn) + " is not function");
+}
+
+LObj subrCar(LObj args) {
+  return safeCar(safeCar(args));
+}
+
+LObj subrCdr(LObj args) {
+  return safeCdr(safeCar(args));
+}
+
+LObj subrCons(LObj args) {
+  return makeCons(safeCar(args), safeCar(safeCdr(args)));
 }
 
 String? readLine() => process.readLine();
 
 void run() {
+  addToEnv(makeSym("car"), makeSubr(subrCar), g_env);
+  addToEnv(makeSym("cdr"), makeSubr(subrCdr), g_env);
+  addToEnv(makeSym("cons"), makeSubr(subrCons), g_env);
   addToEnv(makeSym("t"), makeSym("t"), g_env);
 
   while (true) {
