@@ -10,7 +10,7 @@ class ConsT<T>(T a, T d) {
 }
 alias SubrT<T> => Callable<T, [T]>;
 alias ExprT<T> => [T, T, T];
-alias DataT<T> => Number|String|ConsT<T>|SubrT<T>|ExprT<T>;
+alias DataT<T> => Integer|String|ConsT<T>|SubrT<T>|ExprT<T>;
 
 class LObj(String t, DataT<LObj> d) {
   shared String tag = t;
@@ -55,7 +55,7 @@ LObj makeSym(String str) {
   }
 }
 
-LObj makeNum(Number num) => LObj("num", num);
+LObj makeNum(Integer num) => LObj("num", num);
 
 LObj makeCons(LObj a, LObj d) => LObj("cons", ConsT<LObj>(a, d));
 
@@ -188,7 +188,7 @@ String printObj(LObj obj) {
       return "<error: " + str + ">";
     }
     return str;
-  } else if (is Number num = obj.data) {
+  } else if (is Integer num = obj.data) {
     return num.string;
   } else if (is Cons cons = obj.data) {
     return printList(obj);
@@ -333,12 +333,84 @@ LObj subrCons(LObj args) {
   return makeCons(safeCar(args), safeCar(safeCdr(args)));
 }
 
+LObj subrEq(LObj args) {
+  LObj x = safeCar(args);
+  LObj y = safeCar(safeCdr(args));
+  if (is Integer n1 = x.data, is Integer n2 = y.data, n1 == n2) {
+    return makeSym("t");
+  } else if (x == y) {
+    return makeSym("t");
+  }
+  return kNil;
+}
+
+LObj subrAtom(LObj args) {
+  if (safeCar(args).tag == "cons") {
+    return kNil;
+  }
+  return makeSym("t");
+}
+
+LObj subrNumberp(LObj args) {
+  if (safeCar(args).tag == "num") {
+    return makeSym("t");
+  }
+  return kNil;
+}
+
+LObj subrSymbolp(LObj args) {
+  if (safeCar(args).tag == "sym") {
+    return makeSym("t");
+  }
+  return kNil;
+}
+
+Subr subrAddOrMul(Callable<Integer, [Integer, Integer]> fn, Integer init_val) {
+  return (variable LObj args) {
+    variable Integer ret = init_val;
+    while (is Cons cons = args.data) {
+      if (is Integer num = cons.car.data) {
+        ret = fn(ret, num);
+      } else {
+        return makeError("wrong type");
+      }
+      args = cons.cdr;
+    }
+    return makeNum(ret);
+  };
+}
+Subr subrAdd = subrAddOrMul((Integer x, Integer y) => x + y, 0);
+Subr subrMul = subrAddOrMul((Integer x, Integer y) => x * y, 1);
+
+Subr subrSubOrDivOrMod(Callable<Integer, [Integer, Integer]> fn) {
+  return (LObj args) {
+    LObj x = safeCar(args);
+    LObj y = safeCar(safeCdr(args));
+    if (is Integer n1 = x.data, is Integer n2 = y.data) {
+      return makeNum(fn(n1, n2));
+    }
+    return makeError("wrong type");
+  };
+}
+Subr subrSub = subrSubOrDivOrMod((Integer x, Integer y) => x - y);
+Subr subrDiv = subrSubOrDivOrMod((Integer x, Integer y) => x / y);
+Subr subrMod = subrSubOrDivOrMod((Integer x, Integer y) => x % y);
+
 String? readLine() => process.readLine();
 
 void run() {
   addToEnv(makeSym("car"), makeSubr(subrCar), g_env);
   addToEnv(makeSym("cdr"), makeSubr(subrCdr), g_env);
   addToEnv(makeSym("cons"), makeSubr(subrCons), g_env);
+  addToEnv(makeSym("eq"), makeSubr(subrEq), g_env);
+  addToEnv(makeSym("atom"), makeSubr(subrAtom), g_env);
+  addToEnv(makeSym("numberp"), makeSubr(subrNumberp), g_env);
+  addToEnv(makeSym("symbolp"), makeSubr(subrSymbolp), g_env);
+  addToEnv(makeSym("+"), makeSubr(subrAdd), g_env);
+  addToEnv(makeSym("*"), makeSubr(subrMul), g_env);
+  addToEnv(makeSym("-"), makeSubr(subrSub), g_env);
+  addToEnv(makeSym("/"), makeSubr(subrDiv), g_env);
+  addToEnv(makeSym("mod"), makeSubr(subrMod), g_env);
   addToEnv(makeSym("t"), makeSym("t"), g_env);
 
   while (true) {
