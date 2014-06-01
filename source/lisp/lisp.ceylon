@@ -206,18 +206,62 @@ String printList(variable LObj obj) {
   return "(" + ret + " . " + printObj(obj) + ")";
 }
 
+LObj findVar(LObj sym, variable LObj env) {
+  while (is Cons ec = env.data) {
+    variable LObj alist = ec.car;
+    while (is Cons ac = alist.data) {
+      variable Boolean found = false;
+      if (is Cons pair = ac.car.data, pair.car == sym) {
+        // I don't know why but we can't return ac.car here. It looks like
+        // nested "is" doesn't work.
+        found = true;
+      }
+      if (found) {
+        return ac.car;
+      }
+      alist = ac.cdr;
+    }
+    env = ec.cdr;
+  }
+  return kNil;
+}
+
+variable LObj g_env = makeCons(kNil, kNil);
+
+void addToEnv(LObj sym, LObj val, LObj env) {
+  if (is Cons cons = env.data) {
+    cons.car = makeCons(makeCons(sym, val), cons.car);
+  }
+}
+
+LObj eval(LObj obj, LObj env) {
+  if (obj.tag == "nil" || obj.tag == "num" || obj.tag == "error") {
+    return obj;
+  } else if (obj.tag == "sym") {
+    LObj bind = findVar(obj, env);
+    if (is Cons pair = bind.data) {
+      return pair.cdr;
+    } else if (is String str = obj.data) {  // Must be true.
+      return makeError(str + " has no value");
+    }
+  }
+  return makeError("noimpl");
+}
+
 String? readLine() => process.readLine();
 
 void run() {
-    while (true) {
-      process.write("> ");
-      process.flush();
-      // HACK: The return type of process.readLine is String but it can return
-      // null when it reads EOF. I verified this code works on ceylon 1.0.0.
-      if (exists line = readLine()) {
-        print(printObj(read(line).obj));
-      } else {
-        break;
-      }
+  addToEnv(makeSym("t"), makeSym("t"), g_env);
+
+  while (true) {
+    process.write("> ");
+    process.flush();
+    // HACK: The return type of process.readLine is String but it can return
+    // null when it reads EOF. I verified this code works on ceylon 1.0.0.
+    if (exists line = readLine()) {
+      print(printObj(eval(read(line).obj, g_env)));
+    } else {
+      break;
     }
+  }
 }
